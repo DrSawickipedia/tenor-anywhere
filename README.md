@@ -1,4 +1,9 @@
 # Tenor Anywhere
+This is a fork of https://github.com/bacongravy/tenor-anywhere that adds some random features I needed:
+- a button to copy the gif directly to clipboard rather than just the link
+
+
+# Original README:
 
 Sometimes you're composing a chat message or commenting on a pull request, and the need to insert a gif strikes, but opening a new browser window would totally break your flow. *Tenor Anywhere* to the rescue!
 
