@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import Foundation
 
 let TENOR_BASE_URL = "https://tenor.com/"
 let TENOR_VIEW_URL = "https://tenor.com/view/"
@@ -11,9 +12,45 @@ let MARKDOWN_SUFFIX = ")"
 let STATUS_ITEM_TITLE = "Tenor Anywhere"
 let COPY_URL_MENU_ITEM_TITLE = "Copy GIF URL"
 let COPY_MARKDOWN_MENU_ITEM_TITLE = "Copy GIF URL (GitHub Markdown)"
+let COPY_IMAGE_MENU_ITEM_TITLE = "Copy GIF as Image"
 let QUIT_MENU_ITEM_TITLE = "Quit"
 
 let URL_KEY_PATH = "URL"
+
+
+// Function to extract a meta tag's content from HTML
+func extractMetaTagContent(from html: String, property: String) -> String? {
+    let pattern = "<meta property=\"\(property)\" content=\"([^\"]+)\""
+    
+    if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+       let match = regex.firstMatch(in: html, options: [], range: NSRange(location: 0, length: html.utf16.count)) {
+        
+        if let range = Range(match.range(at: 1), in: html) {
+            return String(html[range])
+        }
+    }
+    
+    return nil
+}
+func fetchImageURL(from url: URL, completion: @escaping (String?) -> Void) {
+    URLSession.shared.dataTask(with: url) { data, response, error in
+        guard let data = data, let html = String(data: data, encoding: .utf8) else {
+            completion(nil)
+            return
+        }
+
+        // Regex to match <meta itemprop="contentUrl" content="URL">
+        let pattern = #"<meta\s+itemprop="contentUrl"\s+content="([^"]+)""#
+        if let range = html.range(of: pattern, options: .regularExpression),
+           let match = html[range].range(of: #"https?://[^"]+"#, options: .regularExpression) {
+            let imageUrl = String(html[match])
+            completion(imageUrl)
+        } else {
+            completion(nil)
+        }
+    }.resume()
+}
+
 
 func gifURL(url: URL?) -> String? {
     guard let string = url?.absoluteString else { return nil }
@@ -64,6 +101,7 @@ class MainController: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     let webViewItem = NSMenuItem.init()
     let copyURLItem = NSMenuItem.init()
     let copyMarkdownItem = NSMenuItem.init()
+    let copyImageItem = NSMenuItem.init()
     let quitItem = NSMenuItem.init()
     
     override init() {
@@ -95,6 +133,9 @@ class MainController: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         copyMarkdownItem.title = COPY_MARKDOWN_MENU_ITEM_TITLE
         copyMarkdownItem.target = self
         copyMarkdownItem.action = #selector(MainController.copyMarkdown(_:))
+        copyImageItem.title = COPY_IMAGE_MENU_ITEM_TITLE
+        copyImageItem.target = self
+        copyImageItem.action = #selector(MainController.copyImage(_:))
         quitItem.title = QUIT_MENU_ITEM_TITLE
         quitItem.target = self
         quitItem.action = #selector(MainController.quit(_:))
@@ -102,6 +143,7 @@ class MainController: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         statusMenu.addItem(NSMenuItem.separator())
         statusMenu.addItem(copyURLItem)
         statusMenu.addItem(copyMarkdownItem)
+        statusMenu.addItem(copyImageItem)
         statusMenu.addItem(NSMenuItem.separator())
         statusMenu.addItem(quitItem)
     }
@@ -124,6 +166,51 @@ class MainController: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     
     func applicationDidBecomeActive(_ notification: Notification) {
         popUpStatusItem()
+    }
+    
+    func copyImageFromURL(_ url: String?) {
+        guard let url = url, let imageURL = URL(string: url) else { return }
+        
+        let task = URLSession.shared.dataTask(with: imageURL) { data, response, error in
+            if let error = error {
+                print("Failed to load image: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let data = data else {
+                print("Invalid image data")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                do {
+                    // Create a temporary file path
+                    let tempDir = FileManager.default.temporaryDirectory
+                    let tempFileURL = tempDir.appendingPathComponent("copied_gif.gif")
+                    
+                    // Write GIF data to file
+                    try data.write(to: tempFileURL)
+                    
+                    // Copy file reference to clipboard
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setData(tempFileURL.dataRepresentation, forType: .fileURL)
+                    
+                    print("GIF copied successfully! File path: \(tempFileURL.path)")
+                } catch {
+                    print("Error saving GIF: \(error)")
+                }
+            }
+        }
+        
+        task.resume()
+    }
+
+
+    func fetchGIFURLFromTenorPage(_ url: URL?) {
+//        guard let url = URL(string: pageURL) else { return }
+        guard let url: URL = url else { return }
+        fetchImageURL(from: url, completion: copyImageFromURL)
     }
     
     @objc func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
@@ -156,6 +243,10 @@ class MainController: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     
     @objc func copyMarkdown(_ sender: AnyObject) {
         setPasteboard(string: gifMarkdown(url: webView.url))
+    }
+    
+    @objc func copyImage(_ sender: AnyObject) {
+        fetchGIFURLFromTenorPage(webView.url)
     }
     
     @objc func quit(_ sender: AnyObject) {
