@@ -1,3 +1,4 @@
 *.xcuserdatad
 /build/
 .DS_Store
+tenor-anywhere.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings

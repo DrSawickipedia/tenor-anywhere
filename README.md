@@ -2,6 +2,8 @@
 This is a fork of https://github.com/bacongravy/tenor-anywhere that adds some random features I needed:
 - a button to copy the gif directly to clipboard rather than just the link
 
+### Build Notes
+I didn't bother to set up proper cert signing and whatnot for the application's deployment: just clone the repository and have xcode make an archive for you, and that .app should run fine on your local device
 
 # Original README:
 
